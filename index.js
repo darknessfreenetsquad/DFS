@@ -1,14 +1,21 @@
 const express = require('express');
+const { default: makeWASocket, useMultiFileAuthState } = require('@whiskeysockets/baileys');
 const app = express();
 app.use(express.json());
-app.get('/', (req, res) => { res.sendFile(__dirname + '/home.html'); });
-app.get('/dl', (req, res) => { res.json({ status: 'red ready' }); });
+
+let latestQR = null;
+async function startWA() {
+  const { state, saveCreds } = await useMultiFileAuthState('auth');
+  const sock = makeWASocket({ auth: state });
+  sock.ev.on('creds.update', saveCreds);
+  sock.ev.on('connection.update', u => { if (u.qr) latestQR = u.qr; });
+}
+startWA();
+
+app.get('/', (req, res) => res.sendFile(__dirname + '/home.html'));
+app.get('/qr', (req, res) => res.json({ qr: latestQR }));
 app.post('/dl', (req, res) => {
   const text = req.body?.message || '';
-  if (text.startsWith('.play') || text.startsWith('/song')) {
-    const q = text.split(' ').slice(1).join(' ');
-    res.json({ reply: `pretending to play ${q} - title, 3:15, link` });
-  } else { res.json({ reply: `red got: ${text}` }); }
+  res.json({ reply: `red got: ${text}` });
 });
-const port = process.env.PORT || 3003;
-app.listen(port, () => console.log('red starting on', port));
+app.listen(process.env.PORT || 3003, () => console.log('red starting'));
